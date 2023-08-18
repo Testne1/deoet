@@ -20,7 +20,7 @@ let POSTDATA = undefined;
 
 if (process.argv.length < 8){
     console.log('HTTP-CRUSH   |   [@tcpall]');
-    console.log('node HTTP-CRUSH.js <Method> <Target> <Proxy List> <Time> <Requests Per IP> <Threads>');
+    console.log('node CF.js <Method> <Target> <Proxy List> <Time> <Requests Per IP> <Threads>');
     process.exit(0);
 }
 
