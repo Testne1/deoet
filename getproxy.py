@@ -13,8 +13,6 @@ raw_proxy_sites = [ "https://raw.githubusercontent.com/jetkai/proxy-list/main/on
     "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
     "https://www.proxy-list.download/api/v1/get?type=http",
     "https://www.proxy-list.download/api/v1/get?type=https",
-    "https://www.proxyscan.io/download?type=http",
-    "https://www.proxyscan.io/download?type=https",
     "https://api.openproxylist.xyz/http.txt"]
 for site in raw_proxy_sites:
     response = requests.get(site)
