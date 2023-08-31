@@ -34,7 +34,7 @@ const MIN_ARGS = 8;
 
 if (process.argv.length < MIN_ARGS){
     console.error(`Error: Not enough arguments provided`);
-    console.log(`Usage: node ${file} <MODE> <host> <proxies> <duration> <rate> <threads> (options cookie="" postdata="" randomstring="" headerdata="")`);
+    console.log("Usage: node ${file} <MODE> <host> <proxies> <duration> <rate> <threads> (options cookie="" postdata="" randomstring="" headerdata="")");
     process.exit(1);
 }
 process.argv.forEach((ss) => {
