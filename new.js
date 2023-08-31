@@ -33,9 +33,7 @@ let randomparam = false;
 const MIN_ARGS = 8;
 
 if (process.argv.length < MIN_ARGS){
-    console.error(`Error: Not enough arguments provided`);
-    console.log("Usage: node ${file} <MODE> <host> <proxies> <duration> <rate> <threads> (options cookie="" postdata="" randomstring="" headerdata="")");
-    process.exit(1);
+    console.log("Usage: node new <MODE> <host> <proxies> <duration> <rate> <threads> ");
 }
 process.argv.forEach((ss) => {
     if (ss.includes("cookie=")){
