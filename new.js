@@ -34,7 +34,7 @@ const MIN_ARGS = 8;
 
 if (process.argv.length < MIN_ARGS){
     console.log("Usage: node new <MODE> <host> <proxies> <duration> <rate> <threads> ");
-    process.exit(1);
+    process.exit(-1);
 }
 process.argv.forEach((ss) => {
     if (ss.includes("cookie=")){
