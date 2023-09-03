@@ -32,14 +32,14 @@ var fileName = __filename;
 var file = path.basename(fileName);
 try {
 
-    var proxies = fs.readFileSync('https.txt', 'utf-8').toString().replace(/\r/g, '').split('\n');
+    var proxies = fs.readFileSync('http.txt', 'utf-8').toString().replace(/\r/g, '').split('\n');
 	var UAs = fs.readFileSync('ua.txt', 'utf-8').replace(/\r/g, '').split('\n'); //Put your https proxies and useragents
 
 } catch (err) {
 
     if (err.code !== 'ENOENT') throw err;
     console.log('Install https.txt proxies to hit https sites http.txt to hit http sites.');
-    console.log('example: node CFBYPASS-WIZ.js GET 4 https://anonfiles.com/ 45 64');
+    console.log('example: node CFH.js GET 4 https://anonfiles.com/ 45 64');
 
     process.exit();
 }
