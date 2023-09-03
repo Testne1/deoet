@@ -2,7 +2,8 @@ import requests
 import concurrent.futures
 import os
 from time import sleep, perf_counter
-
+vao = input("nhập tên file cần lọc.   ")
+ra = input("nhập output ")
 target_url = "http://httpbin.org/ip"
 
 def clear():
@@ -14,8 +15,8 @@ def thanh():
 clear()
 thanh()
 
-proxy_list = open("http.txt").read().split('\n')
-output_file = "proxies.txt"
+proxy_list = open(vao).read().split('\n')
+output_file = ra
 
 # Kiểm tra và xóa file có tên trùng (nếu tồn tại)
 if os.path.exists(output_file):
